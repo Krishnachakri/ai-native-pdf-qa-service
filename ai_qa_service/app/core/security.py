@@ -16,13 +16,13 @@ def validate_pdf_file(content: bytes) -> None:
         FileTooLargeError: If file exceeds the configured size limit.
         InvalidPDFSignatureError: If magic bytes do not match `%PDF-`.
     """
-    # 1. Size Validation
+
     if len(content) > settings.MAX_FILE_SIZE_BYTES:
         raise FileTooLargeError(len(content))
-        
-    # 2. Magic Bytes Validation
-    # Valid PDF file signature starts with "%PDF-" (ASCII) or hex 25 50 44 46 2d
+
+
+
     if not content.startswith(b"%PDF-"):
-        # Extract starting bytes for reporting
+
         sig = content[:5]
         raise InvalidPDFSignatureError(sig)

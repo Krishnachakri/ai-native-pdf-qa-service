@@ -10,12 +10,12 @@ class PageAwareChunker:
         self.target_tokens = target_tokens
         self.overlap_tokens = overlap_tokens
         self.encoding = tiktoken.get_encoding("cl100k_base")
-        
+
     def _split_into_sentences(self, text: str) -> list[str]:
         """Splits text on sentence endings (.!?), keeping punctuation and cleaning spaces."""
         if not text:
             return []
-        # Replace multiple whitespace characters (newlines, tabs, spaces) with a single space
+
         cleaned_text = re.sub(r'\s+', ' ', text)
         sentences = re.split(r'(?<=[.!?])\s+', cleaned_text)
         return [s.strip() for s in sentences if s.strip()]
@@ -23,15 +23,15 @@ class PageAwareChunker:
     def chunk_document(self, pages_data: list[dict]) -> list[dict]:
         """
         Groups sentences into overlapping chunks based on target token count.
-        
+
         Args:
             pages_data: list of dicts with keys "page" (int) and "text" (str)
-            
+
         Returns:
             list[dict]: A list of chunks:
                 [{"chunk_text": str, "pages": list[int], "excerpt": str}]
         """
-        # 1. Flatten all pages into sentences with page metadata and token counts
+
         flat_sentences = []
         for page_data in pages_data:
             page_num = page_data["page"]
@@ -44,54 +44,54 @@ class PageAwareChunker:
                     "page": page_num,
                     "tokens": tokens
                 })
-                
+
         if not flat_sentences:
             return []
-            
+
         chunks = []
         n = len(flat_sentences)
         i = 0
-        
+
         while i < n:
             chunk_sentences = []
             chunk_tokens = 0
-            
-            # Consume sentences until target token count is reached
+
+
             j = i
             while j < n and chunk_tokens + flat_sentences[j]["tokens"] <= self.target_tokens:
                 chunk_sentences.append(flat_sentences[j])
                 chunk_tokens += flat_sentences[j]["tokens"]
                 j += 1
-                
-            # If a single sentence exceeds target_tokens, we must add it to prevent infinite loop
+
+
             if not chunk_sentences:
                 chunk_sentences.append(flat_sentences[i])
                 chunk_tokens += flat_sentences[i]["tokens"]
                 j = i + 1
-                
-            # Form chunk text, pages metadata, and 100-character excerpt
+
+
             chunk_text = " ".join([s["text"] for s in chunk_sentences])
             pages = sorted(list(set([s["page"] for s in chunk_sentences])))
             excerpt = chunk_text[:100]
-            
+
             chunks.append({
                 "chunk_text": chunk_text,
                 "pages": pages,
                 "excerpt": excerpt
             })
-            
+
             if j >= n:
                 break
-                
-            # Backtrack from j-1 to find the start of the overlap window for the next chunk
+
+
             overlap_sum = 0
             backtrack_idx = j - 1
             while backtrack_idx >= i and overlap_sum + flat_sentences[backtrack_idx]["tokens"] <= self.overlap_tokens:
                 overlap_sum += flat_sentences[backtrack_idx]["tokens"]
                 backtrack_idx -= 1
-                
-            # Advance next iteration start index, ensuring progress
+
+
             next_i = max(i + 1, backtrack_idx + 1)
             i = next_i
-            
+
         return chunks

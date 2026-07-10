@@ -10,14 +10,14 @@ class VectorStore:
     Handles indexing, querying (scoped by document ID), listing, and deduplication.
     """
     def __init__(self):
-        # Initialize persistent storage path
+
         self.client = chromadb.PersistentClient(path=settings.CHROMA_DATA_PATH)
-        # Create or fetch collection using cosine distance metric
+
         self.collection = self.client.get_or_create_collection(
             name="pdf_documents",
             metadata={"hnsw:space": "cosine"}
         )
-        
+
     def get_document_by_hash(self, file_hash: str) -> Optional[Dict[str, Any]]:
         """Checks if a document with the matching SHA-256 hash is already indexed."""
         existing = self.collection.get(where={"file_hash": file_hash}, limit=1)
@@ -57,7 +57,7 @@ class VectorStore:
         records = self.collection.get(include=["metadatas"])
         if not records or not records["metadatas"]:
             return []
-            
+
         seen_docs = {}
         for meta in records["metadatas"]:
             doc_id = meta["document_id"]
@@ -88,17 +88,17 @@ class VectorStore:
         ids = []
         metadatas = []
         documents = []
-        
+
         chunk_count = len(chunks)
         upload_time = datetime.now(timezone.utc).isoformat()
-        
+
         for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
             ids.append(f"{document_id}_chunk_{idx}")
             documents.append(chunk["chunk_text"])
-            
-            # Serialize the list of pages spanned (Chroma metadatas only allow string, int, float, bool)
+
+
             pages_json = json.dumps(chunk["pages"])
-            
+
             metadatas.append({
                 "document_id": document_id,
                 "filename": filename,
@@ -111,7 +111,7 @@ class VectorStore:
                 "prompt_version": settings.PROMPT_VERSION,
                 "upload_time": upload_time
             })
-            
+
         self.collection.add(
             ids=ids,
             embeddings=embeddings,
@@ -122,7 +122,7 @@ class VectorStore:
     def query_similarity(self, document_id: str, query_embedding: List[float], top_k: int) -> List[Dict[str, Any]]:
         """
         Retrieves top_k chunks matching the query embedding inside a specific document.
-        
+
         Returns:
             list[dict]: List of matches containing chunk text, pages, excerpt, and similarity.
         """
@@ -131,25 +131,25 @@ class VectorStore:
             n_results=top_k,
             where={"document_id": document_id}
         )
-        
+
         if not results or not results["ids"] or not results["ids"][0]:
             return []
-            
+
         matched_chunks = []
         for idx in range(len(results["ids"][0])):
             meta = results["metadatas"][0][idx]
             text = results["documents"][0][idx]
-            # Chroma distances metric: Cosine distance is returned (0 = same, 2 = opposite)
+
             dist = results["distances"][0][idx] if (results["distances"] and idx < len(results["distances"][0])) else 1.0
-            
-            # Convert Cosine Distance to Cosine Similarity
+
+
             similarity = 1.0 - dist
-            
+
             matched_chunks.append({
                 "chunk_text": text,
                 "pages": json.loads(meta["pages"]),
                 "excerpt": meta["excerpt"],
                 "similarity": similarity
             })
-            
+
         return matched_chunks

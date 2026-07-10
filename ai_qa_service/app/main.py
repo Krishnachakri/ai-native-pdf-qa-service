@@ -27,7 +27,7 @@ from app.models.schemas import (
     ConfidenceLevel
 )
 
-# 1. Initialize FastAPI Application
+
 app = FastAPI(
     title="RAG PDF Q&A Service",
     version="1.0.0",
@@ -36,18 +36,18 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# 2. Setup Logging Configuration
+
 setup_logging()
 
-# 3. Register Middleware
+
 app.add_middleware(RequestIDMiddleware)
 
-# 4. Instantiate Services (Warmup)
+
 vector_store = VectorStore()
 embedder = Embedder()
 llm_service = LLMService()
 
-# 5. Global Exception Handlers for Structured JSON Error Responses
+
 @app.exception_handler(FileTooLargeError)
 async def file_too_large_handler(request: Request, exc: FileTooLargeError):
     logger.error("Upload failed: File too large", extra={"extra_fields": {"size": exc.size, "max_size": exc.max_size}})
@@ -129,27 +129,27 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         }
     )
 
-# 6. API Endpoints
+
 @app.get("/health", response_model=HealthResponse, tags=["Operations"])
 async def health_check():
     """Checks the health and availability of dependencies (Vector Store, Embedder, LLM Provider)."""
     try:
-        # Check ChromaDB connection status
+
         _ = vector_store.collection.count()
         vector_db_status = "connected"
     except Exception as e:
         logger.error(f"Health Check: ChromaDB check failed: {e}")
         vector_db_status = "disconnected"
-        
+
     embedding_status = "loaded" if (embedder.model is not None) else "unloaded"
     llm_status = "configured" if settings.OPENAI_API_KEY else "misconfigured"
-    
+
     overall_status = "healthy" if (
-        vector_db_status == "connected" and 
-        embedding_status == "loaded" and 
+        vector_db_status == "connected" and
+        embedding_status == "loaded" and
         llm_status == "configured"
     ) else "unhealthy"
-    
+
     return HealthResponse(
         status=overall_status,
         vector_db=vector_db_status,
@@ -172,21 +172,21 @@ async def upload_document(file: UploadFile = File(...)):
     and runs PDF text parsing, semantic chunking, and vector indexing.
     """
     start_time = time.time()
-    
-    # Read raw content to compute size and signatures
+
+
     content = await file.read()
     file_size = len(content)
-    
-    # Reset read pointer
+
+
     await file.seek(0)
-    
-    # 1. Security Check: Size & magic bytes prefix check
+
+
     validate_pdf_file(content)
-    
-    # 2. Compute SHA-256 hash of document content for deduplication
+
+
     file_hash = hashlib.sha256(content).hexdigest()
-    
-    # 3. Deduplication Check
+
+
     existing_doc = vector_store.get_document_by_hash(file_hash)
     if existing_doc:
         total_time_ms = int((time.time() - start_time) * 1000)
@@ -216,18 +216,18 @@ async def upload_document(file: UploadFile = File(...)):
                 total_time_ms=total_time_ms
             )
         )
-        
-    # 4. Process new document
+
+
     doc_id = f"doc_{uuid.uuid4().hex[:12]}"
     token = document_id_ctx.set(doc_id)
-    
+
     try:
-        # Parse PDF
+
         parse_start = time.time()
         pages_data = parse_pdf(content)
         parse_time_ms = int((time.time() - parse_start) * 1000)
-        
-        # Chunk Text
+
+
         chunk_start = time.time()
         chunker = PageAwareChunker(
             target_tokens=settings.CHUNK_SIZE,
@@ -235,14 +235,14 @@ async def upload_document(file: UploadFile = File(...)):
         )
         chunks = chunker.chunk_document(pages_data)
         chunking_time_ms = int((time.time() - chunk_start) * 1000)
-        
-        # Generate Embeddings
+
+
         embed_start = time.time()
         chunk_texts = [c["chunk_text"] for c in chunks]
         embeddings = embedder.encode(chunk_texts)
         embedding_time_ms = int((time.time() - embed_start) * 1000)
-        
-        # Upsert Chunks into ChromaDB
+
+
         index_start = time.time()
         vector_store.upsert_document(
             document_id=doc_id,
@@ -254,9 +254,9 @@ async def upload_document(file: UploadFile = File(...)):
             embeddings=embeddings
         )
         indexing_time_ms = int((time.time() - index_start) * 1000)
-        
+
         total_time_ms = int((time.time() - start_time) * 1000)
-        
+
         logger.info(
             "New PDF uploaded and indexed successfully.",
             extra={"extra_fields": {
@@ -266,11 +266,11 @@ async def upload_document(file: UploadFile = File(...)):
                 "processing_time_ms": total_time_ms
             }}
         )
-        
-        # Pull saved meta (upload_time)
+
+
         meta = vector_store.get_document_by_id(doc_id)
         upload_time = meta["upload_time"] if meta else datetime.now(timezone.utc).isoformat()
-        
+
         return UploadResponse(
             document_id=doc_id,
             filename=file.filename,
@@ -329,29 +329,29 @@ async def query_document(document_id: str, request_payload: QueryRequest):
     """Queries a document by ID using similarity vector search and an LLM provider."""
     token = document_id_ctx.set(document_id)
     try:
-        # 1. Verify document exists
+
         doc = vector_store.get_document_by_id(document_id)
         if not doc:
             raise DocumentNotFoundError()
-            
+
         start_time = time.time()
-        
-        # 2. Embed the user's query
+
+
         query_embedding = embedder.encode([request_payload.query])[0]
-        
-        # 3. Retrieve similar chunks matching the document ID
+
+
         retrieved_chunks = vector_store.query_similarity(
             document_id=document_id,
             query_embedding=query_embedding,
             top_k=settings.TOP_K
         )
-        
-        # 4. Generate structured Q&A response via LLM
+
+
         qa_response = llm_service.generate_answer(
             query=request_payload.query,
             retrieved_chunks=retrieved_chunks
         )
-        
+
         latency_ms = int((time.time() - start_time) * 1000)
         logger.info(
             "Query execution complete.",
@@ -362,7 +362,7 @@ async def query_document(document_id: str, request_payload: QueryRequest):
                 "confidence": qa_response.confidence.value
             }}
         )
-        
+
         return qa_response
     finally:
         document_id_ctx.reset(token)

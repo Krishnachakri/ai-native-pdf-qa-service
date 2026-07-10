@@ -12,12 +12,12 @@ class BaseLLMProvider(ABC):
     def generate_response(self, prompt: str, system_prompt: str, response_schema: type[BaseModel]) -> BaseModel:
         """
         Generates a structured response validated against a Pydantic schema.
-        
+
         Args:
             prompt: The user instruction or text content.
             system_prompt: System-level constraints and formatting rules.
             response_schema: The Pydantic model class to validate the structured output.
-            
+
         Returns:
             BaseModel: An instance of the response_schema.
         """
@@ -35,16 +35,16 @@ class OpenAILLMProvider(BaseLLMProvider):
     @property
     def client(self):
         if self._client is None:
-            # Fall back to openai's default env detection if settings key is not explicitly provided
+
             api_key = settings.OPENAI_API_KEY or None
             self._client = openai.OpenAI(api_key=api_key)
         return self._client
 
     def generate_response(self, prompt: str, system_prompt: str, response_schema: type[BaseModel]) -> BaseModel:
-        # Extract JSON schema from the Pydantic model (Pydantic v2 compatible)
+
         schema = response_schema.model_json_schema()
-        
-        # Define the forced tool schema matching the response schema
+
+
         tool_name = "submit_qa_response"
         tools = [
             {
@@ -56,8 +56,8 @@ class OpenAILLMProvider(BaseLLMProvider):
                 }
             }
         ]
-        
-        # Call OpenAI Chat Completions forcing the specific tool invocation
+
+
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[
@@ -67,11 +67,11 @@ class OpenAILLMProvider(BaseLLMProvider):
             tools=tools,
             tool_choice={"type": "function", "function": {"name": tool_name}}
         )
-        
+
         message = response.choices[0].message
         if not message.tool_calls:
             raise ValueError("OpenAI API response did not include a structured tool call.")
-            
-        # Parse the JSON string from tool arguments back into the Pydantic model
+
+
         arguments_json = message.tool_calls[0].function.arguments
         return response_schema.model_validate_json(arguments_json)

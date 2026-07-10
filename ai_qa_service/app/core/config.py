@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     CHROMA_DATA_PATH: str = "./chroma_data"
-    MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024  # 10MB
+    MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024
     CHUNK_SIZE: int = 500
     CHUNK_OVERLAP: int = 50
     TOP_K: int = 4
