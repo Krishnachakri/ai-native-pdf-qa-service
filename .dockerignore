@@ -1,0 +1,12 @@
+chroma_data/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.env
+.git/
+.gitignore
+tests/
+docs/
+sample_pdfs/

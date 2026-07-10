@@ -1,0 +1,25 @@
+# Local databases
+chroma_data/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+
+# Environment configurations and secrets
+.env
+.env.local
+
+# IDE configurations
+.vscode/
+.idea/
+*.swp
+*.swo
