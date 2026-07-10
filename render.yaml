@@ -3,7 +3,6 @@ services:
     name: ai-native-pdf-qa-service
     env: docker
     dockerfilePath: Dockerfile
-    context: .
     plan: starter
     # Path Render checks to verify service health during deploy rolling updates
     healthCheckPath: /health
